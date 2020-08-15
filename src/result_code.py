@@ -1,6 +1,8 @@
+from enum import Enum
 
 
-class ResultCode:
+class ResultCode(Enum):
+
     Ok = 0
     """ Operation succeeded """
 
