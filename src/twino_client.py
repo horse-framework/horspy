@@ -149,20 +149,20 @@ class TwinoClient:
             self.disconnect()
             return False
 
-    def sendDirect(self, target: str, contentType: np.short, message: str, waitAcknowledge: bool, headers=[]):
+    def send_direct(self, target: str, contentType: np.short, message: str, waitAcknowledge: bool, headers=[]):
         """ Sends a direct message to a client """
         pass
 
-    def pushToQueue(self, channel: str, queue: np.short, message: str, waitAcknowledge: bool, headers=[]):
+    def push_queue(self, channel: str, queue: np.short, message: str, waitAcknowledge: bool, headers=[]):
         pass
 
-    def publishToRouter(self, router: str, contentType: np.short, message: str, waitAcknowledge: bool, headers=[]):
+    def publish_router(self, router: str, contentType: np.short, message: str, waitAcknowledge: bool, headers=[]):
         pass
 
-    def acknowledge(self, message: TwinoMessage):
+    def ack(self, message: TwinoMessage):
         pass
 
-    def negativeAcknowledge(self, message: TwinoMessage):
+    def negative_ack(self, message: TwinoMessage):
         pass
 
     def response(self, requestMessage: TwinoMessage, responseContent: str, headers=[]):
