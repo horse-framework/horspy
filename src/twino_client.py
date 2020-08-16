@@ -5,6 +5,7 @@ import unique_generator
 from datetime import timedelta, datetime
 from typing import List
 from known_content_types import KnownContentTypes
+from message_tracker import MessageTracker
 from message_type import MessageType
 from protocol_reader import ProtocolReader
 from protocol_writer import ProtocolWriter
@@ -59,6 +60,7 @@ class TwinoClient:
     __last_receive: datetime = datetime.utcnow()
     __pong_pending: bool = False
     __pong_deadline: datetime
+    __tracker: MessageTracker
 
     __ping_bytes = b'\x89\xff\x00\x00\x00\x00\x00\x00'
     __pong_bytes = b'\x8a\xff\x00\x00\x00\x00\x00\x00'
@@ -69,6 +71,13 @@ class TwinoClient:
 
     def __init__(self):
         self.id = unique_generator.create()
+        self.__tracker = MessageTracker()
+        self.__tracker.run()
+
+    def destroy(self):
+        """ Destroys client, stops all background processes and releases all resources """
+        self.__tracker.destroy()
+        self.disconnect()
 
     def __resolve_host(self, host: str) -> (str, int, bool):
         """ Resolves host, protocol and port from full endpoint string """
