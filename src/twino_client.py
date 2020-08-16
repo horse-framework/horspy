@@ -2,7 +2,7 @@ import threading
 import socket
 import unique_generator
 
-from datetime import timedelta
+from datetime import timedelta, datetime
 from typing import List
 from known_content_types import KnownContentTypes
 from message_type import MessageType
@@ -45,9 +45,23 @@ class TwinoClient:
     headers: List[MessageHeader] = []
     """ Handshake message headers """
 
+    ping_interval: timedelta = timedelta(seconds=5)
+    """ PING interval """
+
+    smart_heartbeat: bool = True
+    """ If true, PING is sent only on idle mode. If there is active traffic, it's skipped. """
+
     __socket: socket = None
+    __is_ssl: bool = False
     __read_thread: threading.Thread
-    __heartbeat_timer: threading.Timer
+    __heartbeat_timer: threading.Timer = None
+    __last_ping: datetime = datetime.utcnow()
+    __last_receive: datetime = datetime.utcnow()
+    __pong_pending: bool = False
+    __pong_deadline: datetime
+
+    __ping_bytes = b'\x89\xff\x00\x00\x00\x00\x00\x00'
+    __pong_bytes = b'\x8a\xff\x00\x00\x00\x00\x00\x00'
 
     # endregion
 
@@ -88,17 +102,20 @@ class TwinoClient:
         try:
             self.disconnect()
             resolved = self.__resolve_host(host)
+            self.__is_ssl = resolved[2]
             self.__socket = socket.create_connection((resolved[0], resolved[1]))
+
+            # todo: ssl integration
+            if self.__is_ssl:
+                pass
+
             hs = self.__handshake()
             if not hs:
                 return False
 
+            self.__init_connection()
             self.__read_thread = threading.Thread(target=self.__read)
             self.__read_thread.start()
-
-            if not self.__heartbeat_timer:
-                self.__heartbeat_timer = threading.Timer(5, self.__heartbeat)
-                self.__heartbeat_timer.start()
 
             return True
 
@@ -163,19 +180,67 @@ class TwinoClient:
 
     def disconnect(self):
         """ Disconnects from twino messaging queue server """
+        self.__pong_pending = False
+
+        if self.__heartbeat_timer != None:
+            self.__heartbeat_timer.cancel()
+            self.__heartbeat_timer = None
 
         if self.__socket is not None:
-            self.__socket.close()
+            try:
+                self.__socket.shutdown(0)
+                self.__socket.close()
+                self.__socket = None
+            except:
+                self.__socket = None
 
     def __pong(self):
         """ Sends pong message as ping response """
-
-        pass
+        try:
+            self.__socket.sendall(self.__pong_bytes)
+        except:
+            self.disconnect()
 
     def __heartbeat(self):
         """ Checks client activity and sends PING if required """
 
-        pass
+        # we are on next heartbeat and previous pending pong still not received
+        # connection will be reset
+        if self.__pong_pending:
+            self.disconnect()
+            return
+
+        now = datetime.utcnow()
+        diff: timedelta
+        if self.smart_heartbeat:
+            if self.__last_receive > self.__last_ping:
+                diff = now - self.__last_receive
+            else:
+                diff = now - self.__last_ping
+        else:
+            diff = now - self.__last_ping
+
+        if diff > self.ping_interval:
+            self.__pong_pending = True
+            self.__last_ping = datetime.utcnow()
+            try:
+                self.__socket.sendall(self.__ping_bytes)
+            except:
+                self.disconnect()
+                return
+
+        self.__heartbeat_timer = threading.Timer(self.ping_interval.total_seconds(), self.__heartbeat)
+        self.__heartbeat_timer.start()
+
+    def __init_connection(self):
+        """ Initializes connection management objects """
+        self.__last_ping = datetime.utcnow()
+        self.__last_receive = datetime.utcnow()
+        self.__pong_pending = False
+
+        if not self.__heartbeat_timer:
+            self.__heartbeat_timer = threading.Timer(self.ping_interval.total_seconds(), self.__heartbeat)
+            self.__heartbeat_timer.start()
 
     # endregion
 
@@ -188,34 +253,42 @@ class TwinoClient:
         while True:
             try:
                 message = reader.read(self.__socket)
+                if message is None:
+                    self.disconnect()
+                    return
 
-                if message.type == MessageType.Terminate:
+                self.__last_receive = datetime.utcnow()
+
+                if message.type == MessageType.Terminate.value:
                     self.disconnect()
 
-                elif message.type == MessageType.Ping:
+                elif message.type == MessageType.Ping.value:
                     self.__pong()
 
-                elif message.type == MessageType.Pong:
-                    pass
+                elif message.type == MessageType.Pong.value:
+                    self.__pong_pending = False
 
-                elif message.type == MessageType.Server:
+                elif message.type == MessageType.Server.value:
                     if message.content_type == KnownContentTypes.ACCEPTED:
                         self.id = message.target
-                    continue
 
-                elif message.type == MessageType.QueueMessage:
+                elif message.type == MessageType.QueueMessage.value:
+                    # todo: queue message
                     pass
 
-                elif message.type == MessageType.DirectMessage:
+                elif message.type == MessageType.DirectMessage.value:
+                    # todo: direct message
                     pass
 
-                elif message.type == MessageType.Acknowledge:
+                elif message.type == MessageType.Acknowledge.value:
+                    # todo: acknowledge
                     pass
 
-                elif message.type == MessageType.Response:
+                elif message.type == MessageType.Response.value:
+                    # todo: response
                     pass
 
-                # if message.type == MessageType.Event:
+                # if message.type == MessageType.Event.value:
                 #    pass
 
             except:
@@ -230,6 +303,9 @@ class TwinoClient:
 
         try:
             writer = ProtocolWriter()
+            if msg.source_len == 0:
+                msg.source = self.id
+
             bytes = writer.write(msg, additional_headers)
             self.__socket.sendall(bytes.getbuffer())
             return True
@@ -239,29 +315,36 @@ class TwinoClient:
 
     async def send_get_ack(self, msg: TwinoMessage, additional_headers: List[MessageHeader] = None) -> TwinoResult:
         """ Sends a message and waits for acknowledge """
-
+        # todo: send_get_ack
         pass
 
     async def request(self, msg: TwinoMessage, additional_headers: List[MessageHeader] = None) -> TwinoResult:
+        # todo: request
         pass
 
     async def send_direct(self, target: str, content_type: int, message: str, wait_ack: bool, headers=[]):
         """ Sends a direct message to a client """
+        # todo: send_direct
         pass
 
     def push_queue(self, channel: str, queue: int, message: str, wait_ack: bool, headers=[]):
+        # todo: push_queue
         pass
 
     def publish_router(self, router: str, content_type: int, message: str, wait_ack: bool, headers=[]):
+        # todo: publish_router
         pass
 
     def ack(self, message: TwinoMessage):
+        # todo: ack
         pass
 
     def negative_ack(self, message: TwinoMessage):
+        # todo: negative_ack
         pass
 
     def response(self, request_msg: TwinoMessage, response_content: str, headers=[]):
+        # todo: response
         pass
 
     # endregion

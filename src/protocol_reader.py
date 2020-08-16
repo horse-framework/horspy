@@ -48,7 +48,7 @@ class ProtocolReader:
 
         msg.type = first
 
-        if second >= 32 and msg.type != MessageType.Ping and msg.type != MessageType.Pong:
+        if second >= 32 and msg.type != MessageType.Ping.value and msg.type != MessageType.Pong.value:
             msg.has_header = True
             second -= 32
 

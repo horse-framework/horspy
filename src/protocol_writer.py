@@ -40,11 +40,8 @@ class ProtocolWriter:
         # write protocol properties and lengths
         buffer.write(bytes([first, second, msg.message_id_len, msg.source_len, msg.target_len]))
 
-        print(buffer.getbuffer().nbytes)
         # write content type
         buffer.write(msg.content_type.to_bytes(2, 'little', signed=False))
-        print(buffer.getbuffer()[5])
-        print(buffer.getbuffer()[6])
 
         # write message length
         if msg.length < 253:
@@ -66,21 +63,26 @@ class ProtocolWriter:
 
         # write headers
         headers = msg.get_headers()
-        header_stream = io.StringIO()
+        header_count = len(headers)
+        if not additional_headers is None:
+            header_count += len(additional_headers)
 
-        for header in headers:
-            header_stream.write(header.key + ":" + header.value + "\r\n")
+        if header_count > 0:
+            header_stream = io.StringIO()
 
-        if additional_headers is not None:
-            for header in additional_headers:
+            for header in headers:
                 header_stream.write(header.key + ":" + header.value + "\r\n")
 
-        header_str = header_stream.read()
-        header_bytes = header_str.encode('UTF-8')
-        header_length = len(header_bytes)
+            if not additional_headers is None:
+                for header in additional_headers:
+                    header_stream.write(header.key + ":" + header.value + "\r\n")
 
-        buffer.write(header_length.to_bytes(2, 'little', signed=False))
-        buffer.write(header_bytes)
+            header_str = header_stream.read()
+            header_bytes = header_str.encode('UTF-8')
+            header_length = len(header_bytes)
+
+            buffer.write(header_length.to_bytes(2, 'little', signed=False))
+            buffer.write(header_bytes)
 
         # write content
         if msg.length > 0:
