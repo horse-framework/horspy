@@ -16,6 +16,8 @@ from twino_result import TwinoResult
 class TwinoClient:
     """ Twino Client object """
 
+    # region Properties
+
     auto_reconnect: bool = True
     """ If true, reconnects automatically when disconnected """
 
@@ -47,8 +49,39 @@ class TwinoClient:
     __read_thread: threading.Thread
     __heartbeat_timer: threading.Timer
 
+    # endregion
+
+    # region Connection
+
     def __init__(self):
         self.id = unique_generator.create()
+
+    def __resolve_host(self, host: str) -> (str, int, bool):
+        """ Resolves host, protocol and port from full endpoint string """
+
+        sp_protocol = host.split('://')
+        sp_host = sp_protocol[0]
+        if len(sp_protocol) > 1:
+            sp_host = sp_protocol[1]
+
+        sport = sp_host.split(':')
+        hostname = sport[0]
+
+        port = 2622
+        if len(sport) > 1:
+            port_str = sport[1]
+            if port_str.endswith('/'):
+                port_str = port_str[0:len(port_str) - 1]
+
+            port = int(port_str)
+
+        ssl = False
+        if len(sp_protocol) > 1:
+            proto = sp_protocol[0].lower().strip()
+            if proto == 'tmqs':
+                ssl = True
+
+        return (hostname, port, ssl)
 
     def connect(self, host: str) -> bool:
         """Connects to a twino messaging queue host"""
@@ -134,32 +167,19 @@ class TwinoClient:
         if self.__socket is not None:
             self.__socket.close()
 
-    def __resolve_host(self, host: str) -> (str, int, bool):
-        """ Resolves host, protocol and port from full endpoint string """
+    def __pong(self):
+        """ Sends pong message as ping response """
 
-        sp_protocol = host.split('://')
-        sp_host = sp_protocol[0]
-        if len(sp_protocol) > 1:
-            sp_host = sp_protocol[1]
+        pass
 
-        sport = sp_host.split(':')
-        hostname = sport[0]
+    def __heartbeat(self):
+        """ Checks client activity and sends PING if required """
 
-        port = 2622
-        if len(sport) > 1:
-            port_str = sport[1]
-            if port_str.endswith('/'):
-                port_str = port_str[0:len(port_str) - 1]
+        pass
 
-            port = int(port_str)
+    # endregion
 
-        ssl = False
-        if len(sp_protocol) > 1:
-            proto = sp_protocol[0].lower().strip()
-            if proto == 'tmqs':
-                ssl = True
-
-        return (hostname, port, ssl)
+    # region Read
 
     def __read(self):
         """ Reads messages from socket while connected """
@@ -201,13 +221,9 @@ class TwinoClient:
             except:
                 self.__read_thread = None
 
-    def __pong(self):
-        """ Sends pong message as ping response """
+    # endregion
 
-        pass
-
-    def __heartbeat(self):
-        pass
+    # region Send
 
     def send(self, msg: TwinoMessage, additional_headers: List[MessageHeader] = None) -> bool:
         """ Sends a raw message to server. Returns true if all data sent over network. """
@@ -247,3 +263,5 @@ class TwinoClient:
 
     def response(self, request_msg: TwinoMessage, response_content: str, headers=[]):
         pass
+
+    # endregion
