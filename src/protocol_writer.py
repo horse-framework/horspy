@@ -9,7 +9,7 @@ class ProtocolWriter:
     Writes twino message into a bytes stream
     """
 
-    def write(self, msg: TwinoMessage, additionalHeaders: List[MessageHeader] = None) -> io.BytesIO:
+    def write(self, msg: TwinoMessage, additional_headers: List[MessageHeader] = None) -> io.BytesIO:
         """
         Writes twino message into byte stream
         :param msg: message itself
@@ -34,7 +34,7 @@ class ProtocolWriter:
             second += 128
         if msg.pending_acknowledge:
             second += 64
-        if msg.has_header or (additionalHeaders is not None and len(additionalHeaders) > 0):
+        if msg.has_header or (additional_headers is not None and len(additional_headers) > 0):
             second += 32
 
         # write protocol properties and lengths
@@ -71,8 +71,8 @@ class ProtocolWriter:
         for header in headers:
             header_stream.write(header.key + ":" + header.value + "\r\n")
 
-        if additionalHeaders is not None:
-            for header in additionalHeaders:
+        if additional_headers is not None:
+            for header in additional_headers:
                 header_stream.write(header.key + ":" + header.value + "\r\n")
 
         header_str = header_stream.read()
