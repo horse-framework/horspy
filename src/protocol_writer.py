@@ -5,8 +5,17 @@ from twino_message import TwinoMessage, MessageHeader
 
 
 class ProtocolWriter:
+    """
+    Writes twino message into a bytes stream
+    """
 
     def write(self, msg: TwinoMessage, additionalHeaders: List[MessageHeader] = None) -> io.BytesIO:
+        """
+        Writes twino message into byte stream
+        :param msg: message itself
+        :param additionalHeaders: additional headers
+        :return: returs byte stream with 0 seek position
+        """
 
         buffer = io.BytesIO()
 

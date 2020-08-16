@@ -6,6 +6,9 @@ from twino_message import TwinoMessage
 
 
 class ProtocolReader:
+    """
+    Reads twino message frame from socket
+    """
 
     def read(self, sock: socket) -> TwinoMessage:
         """
@@ -30,6 +33,8 @@ class ProtocolReader:
         return msg
 
     def __read_frame(self, array: bytearray, sock: socket, msg: TwinoMessage) -> int:
+        """ Reads frame data """
+
         first = array[0]
         second = array[1]
 
@@ -90,6 +95,7 @@ class ProtocolReader:
         return message_len
 
     def __read_headers(self, sock: socket, msg: TwinoMessage):
+        """ Reads message headers """
 
         # read unsigned int 16 for headers length
         header_bytes = self.__read_certain(sock, 2)
@@ -111,6 +117,8 @@ class ProtocolReader:
             msg.add_header(key, value)
 
     def __read_content(self, sock: socket, length: int, msg: TwinoMessage):
+        """ Reads message content """
+
         msg.reset_content_stream()
         content = msg.get_content_stream()
 
@@ -135,9 +143,14 @@ class ProtocolReader:
 
         msg.recalculate_length()
 
-    def __read_certain(self, sock: socket, bytes: int) -> bytearray:
-        left = bytes
-        buf = bytearray(bytes)
+    def __read_certain(self, sock: socket, length: int) -> bytearray:
+        """
+        Reads certain amount of bytes from socket.
+        If available amount is less than required, blocks the thread.
+        """
+
+        left = length
+        buf = bytearray(length)
         view = memoryview(buf)
         while left:
             read_count = sock.recv_into(view, left)
