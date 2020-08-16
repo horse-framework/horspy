@@ -1,12 +1,9 @@
 import threading
+import socket
+import unique_generator
+
 from datetime import timedelta
 from typing import List
-
-import numpy as np
-import socket
-import io
-
-import unique_generator
 from known_content_types import KnownContentTypes
 from message_type import MessageType
 from protocol_reader import ProtocolReader
@@ -48,6 +45,7 @@ class TwinoClient:
 
     __socket: socket = None
     __read_thread: threading.Thread
+    __heartbeat_timer: threading.Timer
 
     def __init__(self):
         self.id = unique_generator.create()
@@ -64,9 +62,14 @@ class TwinoClient:
 
             self.__read_thread = threading.Thread(target=self.__read)
             self.__read_thread.start()
+
+            if not self.__heartbeat_timer:
+                self.__heartbeat_timer = threading.Timer(5, self.__heartbeat)
+                self.__heartbeat_timer.start()
+
             return True
 
-        except e:
+        except:
             return False
 
     def __handshake(self) -> bool:
@@ -201,6 +204,9 @@ class TwinoClient:
     def __pong(self):
         """ Sends pong message as ping response """
 
+        pass
+
+    def __heartbeat(self):
         pass
 
     def send(self, msg: TwinoMessage, additional_headers: List[MessageHeader] = None) -> bool:
