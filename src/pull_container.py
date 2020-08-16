@@ -1,5 +1,8 @@
 from datetime import datetime
 from enum import Enum
+from typing import List
+
+from twino_message import TwinoMessage
 
 
 class PullProcess(Enum):
@@ -44,3 +47,6 @@ class PullContainer:
 
     last_received: datetime
     """ The date last message received """
+
+    messages: List[TwinoMessage]
+    """ Received messages """
