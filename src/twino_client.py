@@ -201,7 +201,7 @@ class TwinoClient:
 
         return buf
 
-    def disconnect(self):
+    def disconnect(self) -> None:
         """ Disconnects from twino messaging queue server """
         self.__pong_pending = False
 

@@ -15,14 +15,14 @@ class MessageTracker:
     __running: bool = False
     __lock = asyncio.Lock()
 
-    def run(self):
+    def run(self) -> None:
         """ Runs message tracker """
         self.__running = True
         self.__items.clear()
         self.__tracker_thread = threading.Thread(target=self.__elapse)
         self.__tracker_thread.start()
 
-    def destroy(self):
+    def destroy(self) -> None:
         """ Stops message tracker background processes and releases all resources """
         self.__running = False
         self.__items.clear()
@@ -38,7 +38,7 @@ class MessageTracker:
 
         return item.future
 
-    def forget(self, msg: TwinoMessage):
+    def forget(self, msg: TwinoMessage) -> None:
         """ Forgets a message """
         found = self.__find(msg.message_id)
         if found is None:
@@ -47,14 +47,14 @@ class MessageTracker:
         with self.__lock:
             self.__items.remove(found)
 
-    def mark_all_expired(self):
+    def mark_all_expired(self) -> None:
         """ Marks all messages as expired. Used when client is disconnected. """
         with self.__lock:
             for i in self.__items:
                 i.expired()
             self.__items.clear()
 
-    def process(self, response: TwinoMessage):
+    def process(self, response: TwinoMessage) -> None:
         """ Process response or acknowledge message, does process if message is tracked """
         tracking = self.__find(response.message_id)
         if tracking is None:
