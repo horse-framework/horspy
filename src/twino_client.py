@@ -1,3 +1,4 @@
+import asyncio
 import threading
 import socket
 import unique_generator
@@ -9,6 +10,7 @@ from message_tracker import MessageTracker
 from message_type import MessageType
 from protocol_reader import ProtocolReader
 from protocol_writer import ProtocolWriter
+from result_code import ResultCode
 from twino_headers import TwinoHeaders
 from twino_message import TwinoMessage, MessageHeader
 from twino_result import TwinoResult
@@ -26,6 +28,18 @@ class TwinoClient:
     """
     When auto_reconnect is true, client reconnects when disconnected.
     That value is the delay before reconnect attempt.
+    """
+
+    ack_timeout: timedelta = timedelta(seconds=5)
+    """
+    Timeout duration for acknowledge messages of sent messages.
+    Default value is 5 secs
+    """
+
+    request_timeout: timedelta = timedelta(seconds=15)
+    """
+    Timeout duration for request messages.
+    Default value is 15 secs
     """
 
     id: str = None
@@ -289,13 +303,8 @@ class TwinoClient:
                     # todo: direct message
                     pass
 
-                elif message.type == MessageType.Acknowledge.value:
-                    # todo: acknowledge
-                    pass
-
-                elif message.type == MessageType.Response.value:
-                    # todo: response
-                    pass
+                elif message.type == MessageType.Acknowledge.value or message.type == MessageType.Response.value:
+                    self.__tracker.process(message)
 
                 # if message.type == MessageType.Event.value:
                 #    pass
@@ -324,8 +333,39 @@ class TwinoClient:
 
     async def send_get_ack(self, msg: TwinoMessage, additional_headers: List[MessageHeader] = None) -> TwinoResult:
         """ Sends a message and waits for acknowledge """
-        # todo: send_get_ack
-        pass
+        future: asyncio.Future = None
+
+        try:
+            writer = ProtocolWriter()
+            if msg.source_len == 0:
+                msg.source = self.id
+
+            future = self.__tracker.track(msg, self.ack_timeout)
+            bytes = writer.write(msg, additional_headers)
+            self.__socket.sendall(bytes.getbuffer())
+
+            fut: TwinoMessage = await future
+            result = TwinoResult()
+            if fut is None:
+                result.code = ResultCode.Failed
+            else:
+                nack_value = fut.get_header(TwinoHeaders.NEGATIVE_ACKNOWLEDGE_REASON)
+                if nack_value is None:
+                    result.code = ResultCode.Ok
+                else:
+                    result.code = ResultCode.Failed
+                    result.reason = nack_value
+
+            return result
+
+        except:
+            self.disconnect()
+            if future is not None:
+                self.__tracker.forget(msg)
+
+            result = TwinoResult()
+            result.code = ResultCode.SendError
+            return result
 
     async def request(self, msg: TwinoMessage, additional_headers: List[MessageHeader] = None) -> TwinoResult:
         # todo: request

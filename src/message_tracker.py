@@ -28,13 +28,15 @@ class MessageTracker:
         self.__items.clear()
         self.__tracker_thread = None
 
-    def track(self, msg: TwinoMessage, timeout: timedelta):
+    def track(self, msg: TwinoMessage, timeout: timedelta) -> asyncio.Future:
         """ Tracks a message """
         item = TrackingMessage(msg)
         item.expiration = datetime.utcnow() + timeout
 
         with self.__lock:
             self.__items.append(item)
+
+        return item.future
 
     def forget(self, msg: TwinoMessage):
         """ Forgets a message """
