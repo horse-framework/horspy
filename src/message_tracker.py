@@ -21,14 +21,12 @@ class MessageTracker:
         self.__items.clear()
         self.__tracker_thread = threading.Thread(target=self.__elapse)
         self.__tracker_thread.start()
-        pass
 
     def destroy(self):
         """ Stops message tracker background processes and releases all resources """
         self.__running = False
         self.__items.clear()
         self.__tracker_thread = None
-        pass
 
     def track(self, msg: TwinoMessage, timeout: timedelta):
         """ Tracks a message """
@@ -40,19 +38,37 @@ class MessageTracker:
 
     def forget(self, msg: TwinoMessage):
         """ Forgets a message """
-        pass
+        found = self.__find(msg.message_id)
+        if found is None:
+            return
+
+        with self.__lock:
+            self.__items.remove(found)
 
     def mark_all_expired(self):
         """ Marks all messages as expired. Used when client is disconnected. """
-        pass
+        with self.__lock:
+            for i in self.__items:
+                i.expired()
+            self.__items.clear()
 
-    def process_ack(self, ack: TwinoMessage):
-        """ Process acknowledge message, does process if message is tracked """
-        pass
+    def process(self, response: TwinoMessage):
+        """ Process response or acknowledge message, does process if message is tracked """
+        tracking = self.__find(response.message_id)
+        if tracking is None:
+            return
 
-    def process_response(self, response: TwinoMessage):
-        """ Process response message, does process if message is tracked """
-        pass
+        tracking.received(response)
+        with self.__lock:
+            self.__items.remove(tracking)
+
+    def __find(self, msg_id: str) -> TrackingMessage:
+        """ Finds tracking message by message id """
+        with self.__lock:
+            for i in self.__items:
+                if i.message.message_id == msg_id:
+                    return i
+        return None
 
     def __elapse(self):
         """ Checks tracking messages if they are expired """
