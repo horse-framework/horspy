@@ -192,7 +192,7 @@ class TwinoMessage:
 
         if self.__content is None:
             self.__content = io.BytesIO()
-        print(content)
+
         self.__content.write(content.encode('UTF-8'))
         self.__length = self.__content.getbuffer().nbytes
 

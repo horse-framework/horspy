@@ -1,10 +1,14 @@
 import asyncio
+import concurrent.futures
 import threading
 import socket
+import time
+from concurrent import futures
+
 import unique_generator
 
 from datetime import timedelta, datetime
-from typing import List
+from typing import List, Awaitable
 from known_content_types import KnownContentTypes
 from message_tracker import MessageTracker
 from message_type import MessageType
@@ -304,7 +308,7 @@ class TwinoClient:
                     pass
 
                 elif message.type == MessageType.Acknowledge.value or message.type == MessageType.Response.value:
-                    self.__tracker.process(message)
+                    asyncio.run(self.__tracker.process(message))
 
                 # if message.type == MessageType.Event.value:
                 #    pass
@@ -324,6 +328,9 @@ class TwinoClient:
             if msg.source_len == 0:
                 msg.source = self.id
 
+            if not msg.message_id:
+                msg.message_id = unique_generator.create()
+
             bytes = writer.write(msg, additional_headers)
             self.__socket.sendall(bytes.getbuffer())
             return True
@@ -331,27 +338,39 @@ class TwinoClient:
             self.disconnect()
             return False
 
-    async def send_get_ack(self, msg: TwinoMessage, additional_headers: List[MessageHeader] = None) -> TwinoResult:
+    async def send_get_ack(self, msg: TwinoMessage,
+                           additional_headers: List[MessageHeader] = None) -> TwinoResult:  # Awaitable[TwinoResult]:
         """ Sends a message and waits for acknowledge """
         future: asyncio.Future = None
-
         try:
             writer = ProtocolWriter()
             if msg.source_len == 0:
                 msg.source = self.id
 
-            future = self.__tracker.track(msg, self.ack_timeout)
+            if not msg.message_id:
+                msg.message_id = unique_generator.create()
+
+            msg.pending_response = False
+            if not msg.pending_acknowledge:
+                msg.pending_acknowledge = True
+
+            tracking = await self.__tracker.track(msg, self.ack_timeout)
             bytes = writer.write(msg, additional_headers)
             self.__socket.sendall(bytes.getbuffer())
 
-            fut: TwinoMessage = await future
+            while not tracking.future.done():
+                time.sleep(0.001)
+
+            resp: TwinoMessage = await tracking.future
             result = TwinoResult()
-            if fut is None:
-                result.code = ResultCode.Failed
+            if resp is None:
+                result.code = ResultCode.RequestTimeout
+                result.reason = "timeout"
             else:
-                nack_value = fut.get_header(TwinoHeaders.NEGATIVE_ACKNOWLEDGE_REASON)
+                nack_value = resp.get_header(TwinoHeaders.NEGATIVE_ACKNOWLEDGE_REASON)
                 if nack_value is None:
                     result.code = ResultCode.Ok
+                    result.reason = ""
                 else:
                     result.code = ResultCode.Failed
                     result.reason = nack_value
@@ -361,38 +380,100 @@ class TwinoClient:
         except:
             self.disconnect()
             if future is not None:
-                self.__tracker.forget(msg)
+                await self.__tracker.forget(msg)
+
+            result = TwinoResult()
+            result.code = ResultCode.SendError
+            result.reason = ""
+            return result
+
+    async def request(self, msg: TwinoMessage,
+                      additional_headers: List[MessageHeader] = None) -> TwinoResult:  # Awaitable[TwinoResult]:
+        """ Sends a request and waits for response """
+        future: asyncio.Future = None
+        try:
+            writer = ProtocolWriter()
+            if msg.source_len == 0:
+                msg.source = self.id
+
+            msg.pending_acknowledge = False
+            if not msg.pending_response:
+                msg.pending_response = True
+
+            tracking = await self.__tracker.track(msg, self.request_timeout)
+            bytes = writer.write(msg, additional_headers)
+            self.__socket.sendall(bytes.getbuffer())
+
+            while not tracking.future.done():
+                time.sleep(0.001)
+
+            resp: TwinoMessage = await tracking.future
+            result = TwinoResult()
+            if resp is None:
+                result.code = ResultCode.RequestTimeout
+                result.reason = "timeout"
+            else:
+                result.code = resp.content_type
+                result.message = resp
+                result.reason = resp.get_header(TwinoHeaders.REASON)
+
+            return result
+
+        except:
+            self.disconnect()
+            if future is not None:
+                await self.__tracker.forget(msg)
 
             result = TwinoResult()
             result.code = ResultCode.SendError
             return result
 
-    async def request(self, msg: TwinoMessage, additional_headers: List[MessageHeader] = None) -> TwinoResult:
-        # todo: request
-        pass
-
-    async def send_direct(self, target: str, content_type: int, message: str, wait_ack: bool, headers=[]):
+    async def send_direct(self, target: str, content_type: int, message: str, wait_ack: bool,
+                          additional_headers: List[MessageHeader] = None) -> TwinoResult:  # Awaitable[TwinoResult]:
         """ Sends a direct message to a client """
         # todo: send_direct
         pass
 
-    def push_queue(self, channel: str, queue: int, message: str, wait_ack: bool, headers=[]):
-        # todo: push_queue
-        pass
+    async def push_queue(self, channel: str, queue: int, message: str, wait_ack: bool,
+                         additional_headers: List[MessageHeader] = None) -> TwinoResult:
+        """
+        Pushes a message into a queue
+        :param channel: Channel name of the queue
+        :param queue: Queue Id
+        :param message: String message content
+        :param wait_ack: If true, waits for acknowledge
+        :param additional_headers: Additional message headers
+        :return: If operation successful, returns Ok
+        """
 
-    def publish_router(self, router: str, content_type: int, message: str, wait_ack: bool, headers=[]):
+        msg = TwinoMessage()
+        msg.type = MessageType.QueueMessage
+        msg.content_type = queue
+        msg.target = channel
+
+        msg.set_content(message)
+        if wait_ack:
+            msg.pending_acknowledge = True
+            return await self.send_get_ack(msg, additional_headers)
+        else:
+            msg.pending_acknowledge = False
+            return self.send(msg, additional_headers)
+
+    def publish_router(self, router: str, content_type: int, message: str, wait_ack: bool,
+                       additional_headers: List[MessageHeader] = None) -> TwinoResult:
         # todo: publish_router
         pass
 
-    def ack(self, message: TwinoMessage):
+    def ack(self, message: TwinoMessage) -> TwinoResult:
         # todo: ack
         pass
 
-    def negative_ack(self, message: TwinoMessage):
+    def negative_ack(self, message: TwinoMessage) -> TwinoResult:
         # todo: negative_ack
         pass
 
-    def response(self, request_msg: TwinoMessage, response_content: str, headers=[]):
+    def response(self, request_msg: TwinoMessage, response_content: str,
+                 additional_headers: List[MessageHeader] = None) -> TwinoResult:
         # todo: response
         pass
 

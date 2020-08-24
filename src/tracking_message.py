@@ -34,7 +34,8 @@ class TrackingMessage:
         self.__message = msg
         self.__is_ack = msg.pending_acknowledge
         self.__completed = False
-        self.__future = asyncio.Future()
+        loop = asyncio.get_event_loop()
+        self.__future = loop.create_future()  # asyncio.Future()
 
     def expired(self):
         """ Marks future as response is expired """
@@ -44,7 +45,7 @@ class TrackingMessage:
 
         try:
             self.__completed = True
-            self.future.set_result(None)
+            self.__future.set_result(None)
         except:
             pass
 
@@ -56,6 +57,6 @@ class TrackingMessage:
 
         try:
             self.__completed = True
-            self.future.set_result(msg)
+            self.__future.set_result(msg)
         except:
             pass
