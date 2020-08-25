@@ -13,6 +13,7 @@ from protocol_reader import ProtocolReader
 from protocol_writer import ProtocolWriter
 from pull_container import PullContainer
 from pull_request import PullRequest
+from subscription import Subscription
 from result_code import ResultCode
 from twino_headers import TwinoHeaders
 from twino_message import TwinoMessage, MessageHeader
@@ -79,6 +80,7 @@ class TwinoClient:
     __pong_deadline: datetime
     __tracker: MessageTracker
     __joined_channels: List[str] = []
+    __subscriptions: List[Subscription] = []
 
     __ping_bytes = b'\x89\xff\x00\x00\x00\x00\x00\x00'
     __pong_bytes = b'\x8a\xff\x00\x00\x00\x00\x00\x00'
@@ -328,12 +330,76 @@ class TwinoClient:
     # Subscription
 
     def on(self, channel: str, queue: int, func: Callable[[TwinoMessage], None], auto_join: bool = True):
-        # todo: on
-        pass
+        """
+        Subscribes to a queue in a channel
+        :param channel: Channel name
+        :param queue: Queue Id
+        :param func: Function that will be called when a message is received
+        :param auto_join: If true and client still not joined to channel, joins
+        :return:
+        """
+
+        subs = [x for x in self.__subscriptions if not x.direct and x.channel == channel and x.content_type == queue]
+        if not subs:
+            subs = Subscription()
+            subs.channel = channel
+            subs.content_type = queue
+            subs.direct = False
+            self.__subscriptions.append(subs)
+
+        subs.actions.append(func)
+
+        if auto_join:
+            joined = [x for x in self.__joined_channels if x == channel]
+            if not joined:
+                self.join(channel)
 
     def off(self, channel: str, queue: int, auto_leave: bool = False):
-        # todo: off
-        pass
+        """
+        Unsubscribes from a queue in a channel
+        :param channel: Channel name
+        :param queue: Queue Id
+        :param auto_leave: If true, client leaves from channel to. If you have multiple queues in same channel, leaving from channel affects other subscriptions.
+        :return:
+        """
+
+        subs = [x for x in self.__subscriptions if not x.direct and x.channel == channel and x.content_type == queue]
+        if subs:
+            self.__subscriptions.remove(subs)
+
+        if auto_leave:
+            joined = [x for x in self.__joined_channels if x == channel]
+            if joined:
+                self.leave(channel)
+
+    def on_direct(self, content_type: int, func: Callable[[TwinoMessage], None]):
+        """
+        Subscribes to all direct messages with specified content type
+        :param content_type: Message content type
+        :param func: Function that will be called when a message is received
+        :return:
+        """
+
+        subs = [x for x in self.__subscriptions if x.direct and x.content_type == content_type]
+        if not subs:
+            subs = Subscription()
+            subs.channel = None
+            subs.content_type = content_type
+            subs.direct = True
+            self.__subscriptions.append(subs)
+
+        subs.actions.append(func)
+
+    def off_direct(self, content_type: int):
+        """
+        Unsubscribes from all direct messages with specified content type
+        :param content_type: Message content type
+        :return:
+        """
+
+        subs = [x for x in self.__subscriptions if x.direct and x.content_type == content_type]
+        if subs:
+            self.__subscriptions.remove(subs)
 
     # endregion
 
