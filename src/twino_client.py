@@ -18,6 +18,7 @@ from result_code import ResultCode
 from twino_headers import TwinoHeaders
 from twino_message import TwinoMessage, MessageHeader
 from twino_result import TwinoResult
+from known_content_types import KnownContentTypes
 
 
 class TwinoClient:
@@ -327,7 +328,7 @@ class TwinoClient:
 
     # endregion
 
-    # Subscription
+    # region Subscription
 
     def on(self, channel: str, queue: int, func: Callable[[TwinoMessage], None], auto_join: bool = True):
         """
@@ -405,13 +406,45 @@ class TwinoClient:
 
     # region Channels
 
-    async def join(self, channel: str) -> TwinoResult:
-        # todo: join
-        pass
+    async def join(self, channel: str, wait_ack: bool = False) -> TwinoResult:
+        """
+        Joins to a channel
+        :param channel: Channel name
+        :param wait_ack: If true, waits for acknowledge from server
+        :return: If waits for ack, ack result. Otherview Ok if message is sent successfuly
+        """
 
-    async def leave(self, channel: str) -> TwinoResult:
-        # todo: leave
-        pass
+        msg = TwinoMessage()
+        msg.type = MessageType.Server
+        msg.content_type = KnownContentTypes.Join
+        msg.target = channel
+        msg.pending_response = wait_ack
+
+        if wait_ack:
+            msg.message_id = unique_generator.create()
+            return await self.request(msg)
+
+        return self.send(msg)
+
+    async def leave(self, channel: str, wait_ack: bool = False) -> TwinoResult:
+        """
+        Leavess from a channel
+        :param channel: Channel name
+        :param wait_ack: If true, waits for acknowledge from server
+        :return: If waits for ack, ack result. Otherview Ok if message is sent successfuly
+        """
+
+        msg = TwinoMessage()
+        msg.type = MessageType.Server
+        msg.content_type = KnownContentTypes.Leave
+        msg.target = channel
+        msg.pending_response = wait_ack
+
+        if wait_ack:
+            msg.message_id = unique_generator.create()
+            return await self.request(msg)
+
+        return self.send(msg)
 
     # endregion
 

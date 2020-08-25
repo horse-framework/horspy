@@ -1,4 +1,7 @@
-class KnownContentTypes:
+from enum import Enum
+
+
+class KnownContentTypes(Enum):
     """
     Known content types are usually used for Server type messages.
     """
