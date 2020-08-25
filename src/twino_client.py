@@ -64,7 +64,7 @@ class TwinoClient:
     headers: List[MessageHeader] = []
     """ Handshake message headers """
 
-    ping_interval: timedelta = timedelta(seconds=5)
+    ping_interval: timedelta = timedelta(seconds=150)
     """ PING interval """
 
     smart_heartbeat: bool = True
@@ -375,9 +375,9 @@ class TwinoClient:
         :return:
         """
 
-        subs = next(
-            (x for x in self.__subscriptions if not x.direct and x.channel == channel and x.content_type == queue),
-            None)
+        subs = next((x for x in self.__subscriptions
+                     if not x.direct and x.channel == channel and x.content_type == queue), None)
+
         if not subs:
             subs = Subscription()
             subs.channel = channel

@@ -48,6 +48,14 @@ class ProtocolReader:
 
         msg.type = first
 
+        if second >= 128:
+            msg.pending_response = True
+            second -= 128
+
+        if second >= 64:
+            msg.pending_acknowledge = True
+            second -= 64
+
         if second >= 32 and msg.type != MessageType.Ping.value and msg.type != MessageType.Pong.value:
             msg.has_header = True
             second -= 32
