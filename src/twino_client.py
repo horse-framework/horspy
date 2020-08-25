@@ -148,9 +148,8 @@ class TwinoClient:
             if not hs:
                 return False
 
-            # todo: rejoin to joined channels
-
             self.__init_connection()
+            self.__rejoin()
             self.__read_thread = threading.Thread(target=self.__read)
             self.__read_thread.start()
 
@@ -420,11 +419,20 @@ class TwinoClient:
         msg.target = channel
         msg.pending_response = wait_ack
 
+        result: TwinoResult
         if wait_ack:
             msg.message_id = unique_generator.create()
-            return await self.request(msg)
+            result = await self.request(msg)
+        else:
+            result = self.send(msg)
 
-        return self.send(msg)
+        # add channel to joined list (if not already added)
+        if result.code == ResultCode.Ok:
+            has = [x for x in self.__joined_channels if x == channel]
+            if not has:
+                self.__joined_channels.append(channel)
+
+        return result
 
     async def leave(self, channel: str, wait_ack: bool = False) -> TwinoResult:
         """
@@ -440,11 +448,24 @@ class TwinoClient:
         msg.target = channel
         msg.pending_response = wait_ack
 
+        result: TwinoResult
         if wait_ack:
             msg.message_id = unique_generator.create()
-            return await self.request(msg)
+            result = await self.request(msg)
+        else:
+            result = self.send(msg)
 
-        return self.send(msg)
+        # remove channel from joined channel list
+        if result.code == ResultCode.Ok:
+            self.__joined_channels.remove(channel)
+
+        return result
+
+    def __rejoin(self):
+        """ Rejoins to all channels joined in previous connections """
+
+        for ch in self.__joined_channels:
+            self.join(ch)
 
     # endregion
 
