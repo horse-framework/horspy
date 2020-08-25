@@ -13,7 +13,12 @@ def rec(msg: TwinoMessage) -> None:
     client.ack(msg)
 
 
+def rec_all(msg: TwinoMessage) -> None:
+    print('all_received')
+    print(msg.get_content())
+
 async def main():
+    client.message_received = rec_all
     connected = client.connect("tmq://127.0.0.1:22200")
     print(connected)
     input()
