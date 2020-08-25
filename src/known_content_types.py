@@ -17,3 +17,9 @@ class KnownContentTypes(Enum):
 
     BAD_REQUEST = 400
     """ 400 """
+
+    JOIN = 601
+    """ 601 """
+
+    LEAVE = 602
+    """ 602 """

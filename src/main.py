@@ -1,6 +1,12 @@
 import asyncio
 
 from twino_client import TwinoClient
+from twino_message import TwinoMessage
+
+
+def rec(msg: TwinoMessage) -> None:
+    print('received')
+    print(msg.get_content())
 
 
 async def main():
@@ -8,9 +14,7 @@ async def main():
     connected = client.connect("tmq://127.0.0.1:22200")
     print(connected)
     input()
-    result = await client.push_queue("model-b", 200, "Hello, World!", True)
-    print(result.code)
-    print(result.reason)
+    await client.on("model-a", 1001, rec)
 
 
 asyncio.run(main())

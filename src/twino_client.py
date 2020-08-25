@@ -70,10 +70,15 @@ class TwinoClient:
     smart_heartbeat: bool = True
     """ If true, PING is sent only on idle mode. If there is active traffic, it's skipped. """
 
-    message_received: Callable[[TwinoMessage], None]
+    message_received: Callable[[TwinoMessage], None] = None
     """ General message received event callback. Handles queue and direct messages. """
 
+    @property
+    def connected(self) -> bool:
+        return self.__connected
+
     __socket: socket = None
+    __connected: bool = False
     __is_ssl: bool = False
     __read_thread: threading.Thread
     __heartbeat_timer: threading.Timer = None
@@ -148,8 +153,10 @@ class TwinoClient:
 
             hs = self.__handshake()
             if not hs:
+                self.__connected = False
                 return False
 
+            self.__connected = True
             self.__init_connection()
             self.__rejoin()
             self.__read_thread = threading.Thread(target=self.__read)
@@ -158,6 +165,7 @@ class TwinoClient:
             return True
 
         except:
+            self.__connected = False
             return False
 
     def __handshake(self) -> bool:
@@ -185,7 +193,7 @@ class TwinoClient:
 
         msg = TwinoMessage()
         msg.type = MessageType.Server
-        msg.content_type = KnownContentTypes.HELLO
+        msg.content_type = KnownContentTypes.HELLO.value
         msg.set_content(content)
         sent = self.send(msg)
         if not sent:
@@ -201,6 +209,7 @@ class TwinoClient:
     def disconnect(self) -> None:
         """ Disconnects from twino messaging queue server """
         self.__pong_pending = False
+        self.__connected = False
 
         if self.__heartbeat_timer != None:
             self.__heartbeat_timer.cancel()
@@ -290,6 +299,9 @@ class TwinoClient:
         reader = ProtocolReader()
         while True:
             try:
+                if not self.__connected:
+                    return
+
                 message = reader.read(self.__socket)
                 if message is None:
                     self.disconnect()
@@ -313,28 +325,28 @@ class TwinoClient:
                 # handle queue message
                 elif message.type == MessageType.QueueMessage.value:
                     # find subscriptions
-                    queue_subs = next(x for x in self.__subscriptions
-                                      if not x.direct and x.channel == message.target
-                                      and x.content_type == message.content_type)
+                    queue_subs = next((x for x in self.__subscriptions
+                                       if not x.direct and x.channel == message.target
+                                       and x.content_type == message.content_type), None)
                     if queue_subs:
                         for act in queue_subs.actions:
                             act(message)
 
                     # trigger general event
-                    if not self.message_received:
+                    if not self.message_received is None:
                         self.message_received(message)
 
                 # handle direct message
                 elif message.type == MessageType.DirectMessage.value:
                     # find subscriptions
-                    direct_subs = next(x for x in self.__subscriptions
-                                       if x.direct and x.content_type == message.content_type)
+                    direct_subs = next((x for x in self.__subscriptions
+                                        if x.direct and x.content_type == message.content_type), None)
                     if direct_subs:
                         for act in direct_subs.actions:
                             act(message)
 
                     # trigger general event
-                    if not self.message_received:
+                    if not self.message_received is None:
                         self.message_received(message)
 
                 elif message.type == MessageType.Acknowledge.value or message.type == MessageType.Response.value:
@@ -345,12 +357,15 @@ class TwinoClient:
 
             except:
                 self.__read_thread = None
+                if self.__connected and self.__socket.fileno() == -1:
+                    self.disconnect()
+                    return
 
     # endregion
 
     # region Subscription
 
-    def on(self, channel: str, queue: int, func: Callable[[TwinoMessage], None], auto_join: bool = True):
+    async def on(self, channel: str, queue: int, func: Callable[[TwinoMessage], None], auto_join: bool = True):
         """
         Subscribes to a queue in a channel
         :param channel: Channel name
@@ -361,7 +376,8 @@ class TwinoClient:
         """
 
         subs = next(
-            x for x in self.__subscriptions if not x.direct and x.channel == channel and x.content_type == queue)
+            (x for x in self.__subscriptions if not x.direct and x.channel == channel and x.content_type == queue),
+            None)
         if not subs:
             subs = Subscription()
             subs.channel = channel
@@ -372,9 +388,9 @@ class TwinoClient:
         subs.actions.append(func)
 
         if auto_join:
-            joined = next(x for x in self.__joined_channels if x == channel)
+            joined = next((x for x in self.__joined_channels if x == channel), None)
             if not joined:
-                self.join(channel)
+                await self.join(channel)
 
     def off(self, channel: str, queue: int, auto_leave: bool = False):
         """
@@ -391,7 +407,7 @@ class TwinoClient:
             self.__subscriptions.remove(subs)
 
         if auto_leave:
-            joined = next(x for x in self.__joined_channels if x == channel)
+            joined = next((x for x in self.__joined_channels if x == channel), None)
             if joined:
                 self.leave(channel)
 
@@ -403,7 +419,7 @@ class TwinoClient:
         :return:
         """
 
-        subs = next(x for x in self.__subscriptions if x.direct and x.content_type == content_type)
+        subs = next((x for x in self.__subscriptions if x.direct and x.content_type == content_type), None)
         if not subs:
             subs = Subscription()
             subs.channel = None
@@ -420,7 +436,7 @@ class TwinoClient:
         :return:
         """
 
-        subs = next(x for x in self.__subscriptions if x.direct and x.content_type == content_type)
+        subs = next((x for x in self.__subscriptions if x.direct and x.content_type == content_type), None)
         if subs:
             self.__subscriptions.remove(subs)
 
@@ -438,7 +454,7 @@ class TwinoClient:
 
         msg = TwinoMessage()
         msg.type = MessageType.Server
-        msg.content_type = KnownContentTypes.Join
+        msg.content_type = KnownContentTypes.JOIN.value
         msg.target = channel
         msg.pending_response = wait_ack
 
@@ -451,7 +467,7 @@ class TwinoClient:
 
         # add channel to joined list (if not already added)
         if result.code == ResultCode.Ok:
-            has = next(x for x in self.__joined_channels if x == channel)
+            has = next((x for x in self.__joined_channels if x == channel), None)
             if not has:
                 self.__joined_channels.append(channel)
 
@@ -467,7 +483,7 @@ class TwinoClient:
 
         msg = TwinoMessage()
         msg.type = MessageType.Server
-        msg.content_type = KnownContentTypes.Leave
+        msg.content_type = KnownContentTypes.LEAVE.value
         msg.target = channel
         msg.pending_response = wait_ack
 
@@ -486,7 +502,11 @@ class TwinoClient:
 
     def __rejoin(self):
         """ Rejoins to all channels joined in previous connections """
+        if not self.__joined_channels:
+            self.__joined_channels = []
 
+        if len(self.__joined_channels) == 0:
+            return
         for ch in self.__joined_channels:
             self.join(ch)
 
@@ -494,7 +514,7 @@ class TwinoClient:
 
     # region Send
 
-    def send(self, msg: TwinoMessage, additional_headers: List[MessageHeader] = None) -> bool:
+    def send(self, msg: TwinoMessage, additional_headers: List[MessageHeader] = None) -> TwinoResult:
         """
         Sends a raw message to server. Returns true if all data sent over network.
         :param msg: Sending message
@@ -512,10 +532,14 @@ class TwinoClient:
 
             bytes = writer.write(msg, additional_headers)
             self.__socket.sendall(bytes.getbuffer())
-            return True
+            result = TwinoResult()
+            result.code = ResultCode.Ok
+            return result
         except:
             self.disconnect()
-            return False
+            result = TwinoResult()
+            result.code = ResultCode.Failed
+            return result
 
     async def send_get_ack(self, msg: TwinoMessage,
                            additional_headers: List[MessageHeader] = None) -> TwinoResult:  # Awaitable[TwinoResult]:
