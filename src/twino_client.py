@@ -6,7 +6,6 @@ import unique_generator
 
 from datetime import timedelta, datetime
 from typing import List, Callable
-from known_content_types import KnownContentTypes
 from message_tracker import MessageTracker
 from message_type import MessageType
 from protocol_reader import ProtocolReader
@@ -70,6 +69,9 @@ class TwinoClient:
 
     smart_heartbeat: bool = True
     """ If true, PING is sent only on idle mode. If there is active traffic, it's skipped. """
+
+    message_received: Callable[[TwinoMessage], None]
+    """ General message received event callback. Handles queue and direct messages. """
 
     __socket: socket = None
     __is_ssl: bool = False
@@ -196,24 +198,6 @@ class TwinoClient:
         hs_response = hr_result.decode('UTF-8')
         return hs_response == "TMQP/2.0"
 
-    def __read_certain(self, length: int) -> bytearray:
-        """
-        Reads a certaion amount of bytes
-        """
-
-        left = length
-        buf = bytearray(length)
-        view = memoryview(buf)
-        while left:
-            read_count = self.__socket.recv_into(view, left)
-            if read_count == 0:
-                return None
-
-            view = view[read_count:]  # slicing views is cheap
-            left -= read_count
-
-        return buf
-
     def disconnect(self) -> None:
         """ Disconnects from twino messaging queue server """
         self.__pong_pending = False
@@ -282,6 +266,24 @@ class TwinoClient:
 
     # region Read
 
+    def __read_certain(self, length: int) -> bytearray:
+        """
+        Reads a certaion amount of bytes
+        """
+
+        left = length
+        buf = bytearray(length)
+        view = memoryview(buf)
+        while left:
+            read_count = self.__socket.recv_into(view, left)
+            if read_count == 0:
+                return None
+
+            view = view[read_count:]  # slicing views is cheap
+            left -= read_count
+
+        return buf
+
     def __read(self):
         """ Reads messages from socket while connected """
 
@@ -308,13 +310,32 @@ class TwinoClient:
                     if message.content_type == KnownContentTypes.ACCEPTED:
                         self.id = message.target
 
+                # handle queue message
                 elif message.type == MessageType.QueueMessage.value:
-                    # todo: queue message
-                    pass
+                    # find subscriptions
+                    queue_subs = next(x for x in self.__subscriptions
+                                      if not x.direct and x.channel == message.target
+                                      and x.content_type == message.content_type)
+                    if queue_subs:
+                        for act in queue_subs.actions:
+                            act(message)
 
+                    # trigger general event
+                    if not self.message_received:
+                        self.message_received(message)
+
+                # handle direct message
                 elif message.type == MessageType.DirectMessage.value:
-                    # todo: direct message
-                    pass
+                    # find subscriptions
+                    direct_subs = next(x for x in self.__subscriptions
+                                       if x.direct and x.content_type == message.content_type)
+                    if direct_subs:
+                        for act in direct_subs.actions:
+                            act(message)
+
+                    # trigger general event
+                    if not self.message_received:
+                        self.message_received(message)
 
                 elif message.type == MessageType.Acknowledge.value or message.type == MessageType.Response.value:
                     asyncio.run(self.__tracker.process(message))
@@ -339,7 +360,8 @@ class TwinoClient:
         :return:
         """
 
-        subs = [x for x in self.__subscriptions if not x.direct and x.channel == channel and x.content_type == queue]
+        subs = next(
+            x for x in self.__subscriptions if not x.direct and x.channel == channel and x.content_type == queue)
         if not subs:
             subs = Subscription()
             subs.channel = channel
@@ -350,7 +372,7 @@ class TwinoClient:
         subs.actions.append(func)
 
         if auto_join:
-            joined = [x for x in self.__joined_channels if x == channel]
+            joined = next(x for x in self.__joined_channels if x == channel)
             if not joined:
                 self.join(channel)
 
@@ -363,12 +385,13 @@ class TwinoClient:
         :return:
         """
 
-        subs = [x for x in self.__subscriptions if not x.direct and x.channel == channel and x.content_type == queue]
+        subs = next(
+            x for x in self.__subscriptions if not x.direct and x.channel == channel and x.content_type == queue)
         if subs:
             self.__subscriptions.remove(subs)
 
         if auto_leave:
-            joined = [x for x in self.__joined_channels if x == channel]
+            joined = next(x for x in self.__joined_channels if x == channel)
             if joined:
                 self.leave(channel)
 
@@ -380,7 +403,7 @@ class TwinoClient:
         :return:
         """
 
-        subs = [x for x in self.__subscriptions if x.direct and x.content_type == content_type]
+        subs = next(x for x in self.__subscriptions if x.direct and x.content_type == content_type)
         if not subs:
             subs = Subscription()
             subs.channel = None
@@ -397,7 +420,7 @@ class TwinoClient:
         :return:
         """
 
-        subs = [x for x in self.__subscriptions if x.direct and x.content_type == content_type]
+        subs = next(x for x in self.__subscriptions if x.direct and x.content_type == content_type)
         if subs:
             self.__subscriptions.remove(subs)
 
@@ -428,7 +451,7 @@ class TwinoClient:
 
         # add channel to joined list (if not already added)
         if result.code == ResultCode.Ok:
-            has = [x for x in self.__joined_channels if x == channel]
+            has = next(x for x in self.__joined_channels if x == channel)
             if not has:
                 self.__joined_channels.append(channel)
 
