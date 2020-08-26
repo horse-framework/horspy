@@ -866,6 +866,7 @@ class TwinoClient:
         container.status = PullProcess.Receiving
         container.messages = []
         container.each_msg_func = each_msg_func
+        container.last_received = datetime.utcnow()
         container.future = asyncio.Future()
 
         self.__pull_containers[msg.message_id] = container
@@ -877,6 +878,11 @@ class TwinoClient:
 
         while not container.future.done():
             time.sleep(0.001)
+            diff = datetime.utcnow() - container.last_received
+            if diff > self.request_timeout:
+                self.__pull_containers.pop(msg.message_id)
+                container.future.set_result(None)
+                break
 
         await container.future
         return container
