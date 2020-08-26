@@ -1,4 +1,3 @@
-import io
 from socket import socket
 
 from message_type import MessageType

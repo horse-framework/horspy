@@ -13,7 +13,7 @@ class ProtocolWriter:
         """
         Writes twino message into byte stream
         :param msg: message itself
-        :param additionalHeaders: additional headers
+        :param additional_headers: additional headers
         :return: returs byte stream with 0 seek position
         """
 

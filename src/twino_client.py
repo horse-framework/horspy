@@ -6,13 +6,13 @@ import time
 import unique_generator
 
 from datetime import timedelta, datetime
-from typing import List, Callable
+from typing import List, Callable, Dict
 from message_tracker import MessageTracker
 from message_type import MessageType
 from protocol_reader import ProtocolReader
 from protocol_writer import ProtocolWriter
-from pull_container import PullContainer
-from pull_request import PullRequest
+from pull_container import PullContainer, PullProcess
+from pull_request import PullRequest, ClearDecision, MessageOrder
 from subscription import Subscription
 from result_code import ResultCode
 from twino_headers import TwinoHeaders
@@ -90,6 +90,7 @@ class TwinoClient:
     __tracker: MessageTracker
     __joined_channels: List[str] = []
     __subscriptions: List[Subscription] = []
+    __pull_containers: Dict[str, PullContainer] = []
 
     __ping_bytes = b'\x89\xff\x00\x00\x00\x00\x00\x00'
     __pong_bytes = b'\x8a\xff\x00\x00\x00\x00\x00\x00'
@@ -326,6 +327,30 @@ class TwinoClient:
 
                 # handle queue message
                 elif message.type == MessageType.QueueMessage.value:
+
+                    # check if pull request's response message
+                    if len(self.__pull_containers) > 0 and message.has_header:
+                        request_id = message.get_header(TwinoHeaders.REQUEST_ID)
+                        if request_id in self.__pull_containers:
+                            pull_container = self.__pull_containers[request_id]
+
+                            # message received
+                            if message.length > 0:
+                                pull_container.received_count += 1
+                                pull_container.messages.append(message)
+                                if pull_container.each_msg_func:
+                                    pull_container.each_msg_func(pull_container.received_count, message)
+
+                            # end of pull request
+                            else:
+                                no_content = message.get_header(TwinoHeaders.NO_CONTENT)
+                                if no_content:
+                                    self.__pull_containers.pop(pull_container.request_id)
+                                    try: # already completed future check (maybe timed out at same time etc)
+                                        pull_container.future.set_result(None)
+                                    except:
+                                        pass
+
                     # find subscriptions
                     queue_subs = next((x for x in self.__subscriptions
                                        if not x.direct and x.channel == message.target
@@ -764,7 +789,7 @@ class TwinoClient:
         msg.message_id = message.message_id
         msg.first_acquirer = message.first_acquirer
 
-        if message.type == MessageType.DirectMessage:
+        if message.type == MessageType.DirectMessage.value:
             msg.high_priority = True
             msg.source = message.target
             msg.target = message.source
@@ -797,7 +822,7 @@ class TwinoClient:
         msg.high_priority = request_msg.high_priority
         msg.first_acquirer = request_msg.first_acquirer
 
-        if request_msg.type == MessageType.QueueMessage:
+        if request_msg.type == MessageType.QueueMessage.value:
             msg.target = request_msg.target
         else:
             msg.target = request_msg.source
@@ -808,7 +833,52 @@ class TwinoClient:
         return self.send(msg, additional_headers)
 
     async def pull(self, request: PullRequest, each_msg_func: Callable[[int, TwinoMessage], None]) -> PullContainer:
-        # todo: pull
-        pass
+
+        msg = TwinoMessage()
+        msg.type = MessageType.QueuePullRequest
+        msg.message_id = unique_generator.create()
+        msg.target = request.channel
+        msg.content_type = request.queue_id
+
+        msg.add_header(TwinoHeaders.COUNT, str(request.count))
+
+        if request.clear_after == ClearDecision.AllMessages.value:
+            msg.add_header(TwinoHeaders.CLEAR, "all")
+        elif request.clear_after == ClearDecision.PriorityMessages.value:
+            msg.add_header(TwinoHeaders.CLEAR, "High-Priority")
+        elif request.clear_after == ClearDecision.Messages.value:
+            msg.add_header(TwinoHeaders.CLEAR, "Default-Priority")
+
+        if request.get_counts:
+            msg.add_header(TwinoHeaders.INFO, "yes")
+
+        if request.order == MessageOrder.LIFO.value:
+            msg.add_header(TwinoHeaders.ORDER, TwinoHeaders.LIFO)
+
+        if request.request_headers:
+            for header in request.request_headers:
+                msg.add_header(header.key, header.value)
+
+        container = PullContainer()
+        container.request_id = msg.message_id
+        container.request_count = request.count
+        container.received_count = 0
+        container.status = PullProcess.Receiving
+        container.messages = []
+        container.each_msg_func = each_msg_func
+        container.future = asyncio.Future()
+
+        self.__pull_containers[msg.message_id] = container
+
+        send_result = self.send(msg)
+        if send_result.code != ResultCode.Ok:
+            self.__pull_containers.pop(msg.message_id)
+            return container
+
+        while not container.future.done():
+            time.sleep(0.001)
+
+        await container.future
+        return container
 
     # endregion

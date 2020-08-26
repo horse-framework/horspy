@@ -1,4 +1,3 @@
-import numpy as np
 import io
 from typing import List, Optional
 from message_type import MessageType

@@ -1,6 +1,7 @@
+import asyncio
 from datetime import datetime
 from enum import Enum
-from typing import List
+from typing import List, Callable
 
 from twino_message import TwinoMessage
 
@@ -50,3 +51,7 @@ class PullContainer:
 
     messages: List[TwinoMessage]
     """ Received messages """
+
+    future: asyncio.Future
+
+    each_msg_func: Callable[[int, TwinoMessage], None]
