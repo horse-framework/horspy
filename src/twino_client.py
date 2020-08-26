@@ -1,4 +1,5 @@
 import asyncio
+import ssl
 import threading
 import socket
 import time
@@ -147,9 +148,10 @@ class TwinoClient:
             self.__is_ssl = resolved[2]
             self.__socket = socket.create_connection((resolved[0], resolved[1]))
 
-            # todo: ssl integration
             if self.__is_ssl:
-                pass
+                context = ssl.create_default_context()
+                ssl_socket = context.wrap_socket(self.__socket, server_hostname=resolved[0])
+                self.__socket = ssl_socket
 
             hs = self.__handshake()
             if not hs:

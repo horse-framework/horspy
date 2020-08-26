@@ -19,7 +19,7 @@ def rec_all(msg: TwinoMessage) -> None:
 
 async def main():
     client.message_received = rec_all
-    connected = client.connect("tmq://127.0.0.1:22200")
+    connected = client.connect("tmqs://echo.websocket.org:443")
     print(connected)
     input()
     await client.on("model-a", 1001, rec)
