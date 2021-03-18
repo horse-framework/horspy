@@ -1,17 +1,17 @@
 from socket import socket
 
 from message_type import MessageType
-from twino_message import TwinoMessage
+from horse_message import HorseMessage
 
 
 class ProtocolReader:
     """
-    Reads twino message frame from socket
+    Reads Horse message frame from socket
     """
 
-    def read(self, sock: socket) -> TwinoMessage:
+    def read(self, sock: socket) -> HorseMessage:
         """
-        Reads a twino message from socket.
+        Reads a Horse message from socket.
         :returns None if frame is corrupted or connection is lost while reading
         """
 
@@ -20,7 +20,7 @@ class ProtocolReader:
         if frame_bytes is None:
             return None
 
-        msg = TwinoMessage()
+        msg = HorseMessage()
         message_len = self.__read_frame(frame_bytes, sock, msg)
 
         if msg.has_header:
@@ -31,7 +31,7 @@ class ProtocolReader:
 
         return msg
 
-    def __read_frame(self, array: bytearray, sock: socket, msg: TwinoMessage) -> int:
+    def __read_frame(self, array: bytearray, sock: socket, msg: HorseMessage) -> int:
         """ Reads frame data """
 
         first = array[0]
@@ -101,7 +101,7 @@ class ProtocolReader:
 
         return message_len
 
-    def __read_headers(self, sock: socket, msg: TwinoMessage):
+    def __read_headers(self, sock: socket, msg: HorseMessage):
         """ Reads message headers """
 
         # read unsigned int 16 for headers length
@@ -123,7 +123,7 @@ class ProtocolReader:
             value = line[index + 1:].strip()
             msg.add_header(key, value)
 
-    def __read_content(self, sock: socket, length: int, msg: TwinoMessage):
+    def __read_content(self, sock: socket, length: int, msg: HorseMessage):
         """ Reads message content """
 
         msg.reset_content_stream()

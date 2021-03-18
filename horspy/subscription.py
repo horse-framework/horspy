@@ -1,6 +1,6 @@
 from typing import List, Callable
 
-from twino_message import TwinoMessage
+from horse_message import HorseMessage
 
 
 class Subscription:
@@ -17,5 +17,5 @@ class Subscription:
     content_type: int
     """ Content Type for direct messages and Queue Id for queue messages """
 
-    actions: List[Callable[[TwinoMessage], None]] = []
+    actions: List[Callable[[HorseMessage], None]] = []
     """ Action that will be called when a message is received to specified queue or direct """

@@ -1,4 +1,4 @@
-class TwinoHeaders:
+class HorseHeaders:
     CLIENT_ID = "Client-Id"
     CLIENT_TOKEN = "Client-Token"
     CLIENT_NAME = "Client-Name"
@@ -10,7 +10,7 @@ class TwinoHeaders:
     NACK_REASON_ERROR = "error"
     NACK_REASON_NO_CONSUMERS = "no-consumers"
     NACK_REASON_TIMEOUT = "timeout"
-    TWINO_MQ_SERVER = "Twino-MQ-Server"
+    HORSE_MQ_SERVER = "Horse-MQ-Server"
     CHANNEL_NAME = "Channel-Name"
     CC = "CC"
     REQUEST_ID = "Request-Id"

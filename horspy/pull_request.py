@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import List
 
-from twino_message import MessageHeader
+from horse_message import MessageHeader
 
 
 class MessageOrder(Enum):

@@ -5,7 +5,7 @@ from datetime import timedelta, datetime
 from typing import List
 
 from tracking_message import TrackingMessage
-from twino_message import TwinoMessage
+from horse_message import HorseMessage
 
 
 class MessageTracker:
@@ -29,7 +29,7 @@ class MessageTracker:
         self.__items.clear()
         self.__tracker_thread = None
 
-    async def track(self, msg: TwinoMessage, timeout: timedelta) -> TrackingMessage:
+    async def track(self, msg: HorseMessage, timeout: timedelta) -> TrackingMessage:
         """ Tracks a message """
         item = TrackingMessage(msg)
         item.expiration = datetime.utcnow() + timeout
@@ -39,7 +39,7 @@ class MessageTracker:
 
         return item
 
-    async def forget(self, msg: TwinoMessage) -> None:
+    async def forget(self, msg: HorseMessage) -> None:
         """ Forgets a message """
         found = await self.__find(msg.message_id)
         if found is None:
@@ -55,7 +55,7 @@ class MessageTracker:
                 i.expired()
             self.__items.clear()
 
-    async def process(self, response: TwinoMessage) -> None:
+    async def process(self, response: HorseMessage) -> None:
         """ Process response or acknowledge message, does process if message is tracked """
         tracking = await self.__find(response.message_id)
         if tracking is None:

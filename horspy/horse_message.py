@@ -14,8 +14,8 @@ class MessageHeader:
         self.value = value
 
 
-class TwinoMessage:
-    """ Message object for Twino Messaging Queue Server """
+class HorseMessage:
+    """ Message object for Horse Messaging Queue Server """
 
     first_acquirer: bool = False
     """ If true, only one consumer receives the message """
@@ -30,7 +30,7 @@ class TwinoMessage:
     """ If true, message must be acknowledged by consumer. That information will be sent to consumer. """
 
     ttl: int = 16
-    """ Message time to live value for TMQP between clients and server nodes. Default value is 16 """
+    """ Message time to live value for HMQP between clients and server nodes. Default value is 16 """
 
     content_type: int = 0
     """ Message content type. For queue messages, it's queue id. """

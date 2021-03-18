@@ -15,14 +15,14 @@ from pull_container import PullContainer, PullProcess
 from pull_request import PullRequest, ClearDecision, MessageOrder
 from subscription import Subscription
 from result_code import ResultCode
-from twino_headers import TwinoHeaders
-from twino_message import TwinoMessage, MessageHeader
-from twino_result import TwinoResult
+from horse_headers import HorseHeaders
+from horse_message import HorseMessage, MessageHeader
+from horse_result import HorseResult
 from known_content_types import KnownContentTypes
 
 
-class TwinoClient:
-    """ Twino Client object """
+class HorseClient:
+    """ Horse Client object """
 
     # region Properties
 
@@ -71,7 +71,7 @@ class TwinoClient:
     smart_heartbeat: bool = True
     """ If true, PING is sent only on idle mode. If there is active traffic, it's skipped. """
 
-    message_received: Callable[[TwinoMessage], None] = None
+    message_received: Callable[[HorseMessage], None] = None
     """ General message received event callback. Handles queue and direct messages. """
 
     @property
@@ -131,15 +131,15 @@ class TwinoClient:
         ssl = False
         if len(sp_protocol) > 1:
             proto = sp_protocol[0].lower().strip()
-            if proto == 'tmqs':
+            if proto == 'hmqs':
                 ssl = True
 
         return (hostname, port, ssl)
 
     def connect(self, host: str) -> bool:
         """
-        Connects to a twino messaging queue host
-        :param host: Example hostnames: tmq://127.0.0.1:1234, tmq://localhost:234, tmqs://secure-host.com:555
+        Connects to a horse messaging queue host
+        :param host: Example hostnames: hmq://127.0.0.1:1234, hmq://localhost:234, hmqs://secure-host.com:555
         :return:
         """
 
@@ -173,28 +173,28 @@ class TwinoClient:
 
     def __handshake(self) -> bool:
         """
-        Sends TMQP handshake message and reads handshake response.
+        Sends HMQP handshake message and reads handshake response.
         :returns true if handshake is successful
         """
 
-        self.__socket.sendall("TMQP/2.0".encode('UTF-8'))
+        self.__socket.sendall("HMQP/2.1".encode('UTF-8'))
 
         # create handshake message properties
         content = 'CONNECT /\r\n'
         if self.id:
-            content += TwinoHeaders.create_line(TwinoHeaders.CLIENT_ID, self.id)
+            content += HorseHeaders.create_line(HorseHeaders.CLIENT_ID, self.id)
         if self.name:
-            content += TwinoHeaders.create_line(TwinoHeaders.CLIENT_NAME, self.name)
+            content += HorseHeaders.create_line(HorseHeaders.CLIENT_NAME, self.name)
         if self.type:
-            content += TwinoHeaders.create_line(TwinoHeaders.CLIENT_TYPE, self.type)
+            content += HorseHeaders.create_line(HorseHeaders.CLIENT_TYPE, self.type)
         if self.token:
-            content += TwinoHeaders.create_line(TwinoHeaders.CLIENT_TOKEN, self.token)
+            content += HorseHeaders.create_line(HorseHeaders.CLIENT_TOKEN, self.token)
 
         if self.headers:
             for h in self.headers:
-                content += TwinoHeaders.create_line(h.key, h.value)
+                content += HorseHeaders.create_line(h.key, h.value)
 
-        msg = TwinoMessage()
+        msg = HorseMessage()
         msg.type = MessageType.Server
         msg.content_type = KnownContentTypes.HELLO.value
         msg.set_content(content)
@@ -207,10 +207,10 @@ class TwinoClient:
             return False
 
         hs_response = hr_result.decode('UTF-8')
-        return hs_response == "TMQP/2.0"
+        return hs_response == "HMQP/2.1"
 
     def disconnect(self) -> None:
-        """ Disconnects from twino messaging queue server """
+        """ Disconnects from Horse messaging queue server """
         self.__pong_pending = False
         self.__connected = False
 
@@ -330,7 +330,7 @@ class TwinoClient:
 
                     # check if pull request's response message
                     if len(self.__pull_containers) > 0 and message.has_header:
-                        request_id = message.get_header(TwinoHeaders.REQUEST_ID)
+                        request_id = message.get_header(HorseHeaders.REQUEST_ID)
                         if request_id in self.__pull_containers:
                             pull_container = self.__pull_containers[request_id]
 
@@ -343,7 +343,7 @@ class TwinoClient:
 
                             # end of pull request
                             else:
-                                no_content = message.get_header(TwinoHeaders.NO_CONTENT)
+                                no_content = message.get_header(HorseHeaders.NO_CONTENT)
                                 if no_content:
                                     self.__pull_containers.pop(pull_container.request_id)
                                     try: # already completed future check (maybe timed out at same time etc)
@@ -392,7 +392,7 @@ class TwinoClient:
 
     # region Subscription
 
-    async def on(self, channel: str, queue: int, func: Callable[[TwinoMessage], None], auto_join: bool = True):
+    async def on(self, channel: str, queue: int, func: Callable[[HorseMessage], None], auto_join: bool = True):
         """
         Subscribes to a queue in a channel
         :param channel: Channel name
@@ -438,7 +438,7 @@ class TwinoClient:
             if joined:
                 self.leave(channel)
 
-    def on_direct(self, content_type: int, func: Callable[[TwinoMessage], None]):
+    def on_direct(self, content_type: int, func: Callable[[HorseMessage], None]):
         """
         Subscribes to all direct messages with specified content type
         :param content_type: Message content type
@@ -471,7 +471,7 @@ class TwinoClient:
 
     # region Channels
 
-    async def join(self, channel: str, wait_ack: bool = False) -> TwinoResult:
+    async def join(self, channel: str, wait_ack: bool = False) -> HorseResult:
         """
         Joins to a channel
         :param channel: Channel name
@@ -479,13 +479,13 @@ class TwinoClient:
         :return: If waits for ack, ack result. Otherview Ok if message is sent successfuly
         """
 
-        msg = TwinoMessage()
+        msg = HorseMessage()
         msg.type = MessageType.Server
         msg.content_type = KnownContentTypes.JOIN.value
         msg.target = channel
         msg.pending_response = wait_ack
 
-        result: TwinoResult
+        result: HorseResult
         if wait_ack:
             msg.message_id = unique_generator.create()
             result = await self.request(msg)
@@ -500,7 +500,7 @@ class TwinoClient:
 
         return result
 
-    async def leave(self, channel: str, wait_ack: bool = False) -> TwinoResult:
+    async def leave(self, channel: str, wait_ack: bool = False) -> HorseResult:
         """
         Leavess from a channel
         :param channel: Channel name
@@ -508,13 +508,13 @@ class TwinoClient:
         :return: If waits for ack, ack result. Otherview Ok if message is sent successfuly
         """
 
-        msg = TwinoMessage()
+        msg = HorseMessage()
         msg.type = MessageType.Server
         msg.content_type = KnownContentTypes.LEAVE.value
         msg.target = channel
         msg.pending_response = wait_ack
 
-        result: TwinoResult
+        result: HorseResult
         if wait_ack:
             msg.message_id = unique_generator.create()
             result = await self.request(msg)
@@ -541,7 +541,7 @@ class TwinoClient:
 
     # region Send
 
-    def send(self, msg: TwinoMessage, additional_headers: List[MessageHeader] = None) -> TwinoResult:
+    def send(self, msg: HorseMessage, additional_headers: List[MessageHeader] = None) -> HorseResult:
         """
         Sends a raw message to server. Returns true if all data sent over network.
         :param msg: Sending message
@@ -559,17 +559,17 @@ class TwinoClient:
 
             bytes = writer.write(msg, additional_headers)
             self.__socket.sendall(bytes.getbuffer())
-            result = TwinoResult()
+            result = HorseResult()
             result.code = ResultCode.Ok
             return result
         except:
             self.disconnect()
-            result = TwinoResult()
+            result = HorseResult()
             result.code = ResultCode.Failed
             return result
 
-    async def send_get_ack(self, msg: TwinoMessage,
-                           additional_headers: List[MessageHeader] = None) -> TwinoResult:  # Awaitable[TwinoResult]:
+    async def send_get_ack(self, msg: HorseMessage,
+                           additional_headers: List[MessageHeader] = None) -> HorseResult:  # Awaitable[HorseResult]:
         """
         Sends a message and waits for acknowledge
         :param msg: Sending message
@@ -597,13 +597,13 @@ class TwinoClient:
             while not tracking.future.done():
                 time.sleep(0.001)
 
-            resp: TwinoMessage = await tracking.future
-            result = TwinoResult()
+            resp: HorseMessage = await tracking.future
+            result = HorseResult()
             if resp is None:
                 result.code = ResultCode.RequestTimeout
                 result.reason = "timeout"
             else:
-                nack_value = resp.get_header(TwinoHeaders.NEGATIVE_ACKNOWLEDGE_REASON)
+                nack_value = resp.get_header(HorseHeaders.NEGATIVE_ACKNOWLEDGE_REASON)
                 if nack_value is None:
                     result.code = ResultCode.Ok
                     result.reason = ""
@@ -618,18 +618,18 @@ class TwinoClient:
             if future is not None:
                 await self.__tracker.forget(msg)
 
-            result = TwinoResult()
+            result = HorseResult()
             result.code = ResultCode.SendError
             result.reason = ""
             return result
 
-    async def request(self, msg: TwinoMessage,
-                      additional_headers: List[MessageHeader] = None) -> TwinoResult:
+    async def request(self, msg: HorseMessage,
+                      additional_headers: List[MessageHeader] = None) -> HorseResult:
         """
         Sends a request and waits for response
         :param msg: Request message
         :param additional_headers: Additional headers
-        :return: Response message is message variable of twino result
+        :return: Response message is message variable of Horse result
         """
 
         future: asyncio.Future = None
@@ -649,15 +649,15 @@ class TwinoClient:
             while not tracking.future.done():
                 time.sleep(0.001)
 
-            resp: TwinoMessage = await tracking.future
-            result = TwinoResult()
+            resp: HorseMessage = await tracking.future
+            result = HorseResult()
             if resp is None:
                 result.code = ResultCode.RequestTimeout
                 result.reason = "timeout"
             else:
                 result.code = resp.content_type
                 result.message = resp
-                result.reason = resp.get_header(TwinoHeaders.REASON)
+                result.reason = resp.get_header(HorseHeaders.REASON)
 
             return result
 
@@ -666,7 +666,7 @@ class TwinoClient:
             if future is not None:
                 await self.__tracker.forget(msg)
 
-            result = TwinoResult()
+            result = HorseResult()
             result.code = ResultCode.SendError
             return result
 
@@ -674,7 +674,7 @@ class TwinoClient:
                           content_type: int,
                           message: str,
                           wait_ack: bool,
-                          additional_headers: List[MessageHeader] = None) -> TwinoResult:
+                          additional_headers: List[MessageHeader] = None) -> HorseResult:
         """
         Sends a direct message to a receiver
         :param target: Unique Id of the client or @name:name_of_client or @type:type_of_client
@@ -685,7 +685,7 @@ class TwinoClient:
         :return:
         """
 
-        msg = TwinoMessage()
+        msg = HorseMessage()
         msg.type = MessageType.DirectMessage
         msg.content_type = content_type
         msg.target = target
@@ -702,7 +702,7 @@ class TwinoClient:
                          queue: int,
                          message: str,
                          wait_ack: bool,
-                         additional_headers: List[MessageHeader] = None) -> TwinoResult:
+                         additional_headers: List[MessageHeader] = None) -> HorseResult:
         """
         Pushes a message into a queue
         :param channel: Channel name of the queue
@@ -713,7 +713,7 @@ class TwinoClient:
         :return: If operation successful, returns Ok
         """
 
-        msg = TwinoMessage()
+        msg = HorseMessage()
         msg.type = MessageType.QueueMessage
         msg.content_type = queue
         msg.target = channel
@@ -730,7 +730,7 @@ class TwinoClient:
                              content_type: int,
                              message: str,
                              wait_ack: bool,
-                             additional_headers: List[MessageHeader] = None) -> TwinoResult:
+                             additional_headers: List[MessageHeader] = None) -> HorseResult:
         """
         Publishes a message to a router
         :param router: Router name
@@ -741,7 +741,7 @@ class TwinoClient:
         :return: If operation successful, returns Ok
         """
 
-        msg = TwinoMessage()
+        msg = HorseMessage()
         msg.type = MessageType.Router
         msg.content_type = router
         msg.target = content_type
@@ -754,7 +754,7 @@ class TwinoClient:
             msg.pending_acknowledge = False
             return self.send(msg, additional_headers)
 
-    def ack(self, message: TwinoMessage) -> TwinoResult:
+    def ack(self, message: HorseMessage) -> HorseResult:
         """
         Sends a positive acknowledge
         :param message: Message that will be acknowledged
@@ -762,7 +762,7 @@ class TwinoClient:
         """
         return self.__send_ack(message, None)
 
-    def negative_ack(self, message: TwinoMessage, reason: str = None) -> TwinoResult:
+    def negative_ack(self, message: HorseMessage, reason: str = None) -> HorseResult:
         """
         Sends a negative acknowledge
         :param message: Message that will be acknowledged
@@ -772,10 +772,10 @@ class TwinoClient:
 
         r = reason
         if not r:
-            r = TwinoHeaders.NACK_REASON_NONE
+            r = HorseHeaders.NACK_REASON_NONE
         return self.__send_ack(message, r)
 
-    def __send_ack(self, message: TwinoMessage, reason: str) -> TwinoResult:
+    def __send_ack(self, message: HorseMessage, reason: str) -> HorseResult:
         """
         Sends an acknowledge message
         :param message: Message that will be acknowledged
@@ -783,7 +783,7 @@ class TwinoClient:
         :return: Returns Ok if sent successfuly
         """
 
-        msg = TwinoMessage()
+        msg = HorseMessage()
         msg.type = MessageType.Acknowledge
         msg.content_type = message.content_type
         msg.message_id = message.message_id
@@ -798,14 +798,14 @@ class TwinoClient:
             msg.target = message.target
 
         if reason:
-            msg.add_header(TwinoHeaders.NEGATIVE_ACKNOWLEDGE_REASON, reason)
+            msg.add_header(HorseHeaders.NEGATIVE_ACKNOWLEDGE_REASON, reason)
 
         return self.send(msg)
 
-    def response(self, request_msg: TwinoMessage,
+    def response(self, request_msg: HorseMessage,
                  status: ResultCode,
                  response_content: str = None,
-                 additional_headers: List[MessageHeader] = None) -> TwinoResult:
+                 additional_headers: List[MessageHeader] = None) -> HorseResult:
         """
         Sends a response message to a request
         :param request_msg: Request message
@@ -815,7 +815,7 @@ class TwinoClient:
         :return: Returns ok, if sent successfully
         """
 
-        msg = TwinoMessage()
+        msg = HorseMessage()
         msg.type = MessageType.Response
         msg.content_type = status.value
         msg.message_id = request_msg.message_id
@@ -832,28 +832,28 @@ class TwinoClient:
 
         return self.send(msg, additional_headers)
 
-    async def pull(self, request: PullRequest, each_msg_func: Callable[[int, TwinoMessage], None]) -> PullContainer:
+    async def pull(self, request: PullRequest, each_msg_func: Callable[[int, HorseMessage], None]) -> PullContainer:
 
-        msg = TwinoMessage()
+        msg = HorseMessage()
         msg.type = MessageType.QueuePullRequest
         msg.message_id = unique_generator.create()
         msg.target = request.channel
         msg.content_type = request.queue_id
 
-        msg.add_header(TwinoHeaders.COUNT, str(request.count))
+        msg.add_header(HorseHeaders.COUNT, str(request.count))
 
         if request.clear_after == ClearDecision.AllMessages.value:
-            msg.add_header(TwinoHeaders.CLEAR, "all")
+            msg.add_header(HorseHeaders.CLEAR, "all")
         elif request.clear_after == ClearDecision.PriorityMessages.value:
-            msg.add_header(TwinoHeaders.CLEAR, "High-Priority")
+            msg.add_header(HorseHeaders.CLEAR, "High-Priority")
         elif request.clear_after == ClearDecision.Messages.value:
-            msg.add_header(TwinoHeaders.CLEAR, "Default-Priority")
+            msg.add_header(HorseHeaders.CLEAR, "Default-Priority")
 
         if request.get_counts:
-            msg.add_header(TwinoHeaders.INFO, "yes")
+            msg.add_header(HorseHeaders.INFO, "yes")
 
         if request.order == MessageOrder.LIFO.value:
-            msg.add_header(TwinoHeaders.ORDER, TwinoHeaders.LIFO)
+            msg.add_header(HorseHeaders.ORDER, HorseHeaders.LIFO)
 
         if request.request_headers:
             for header in request.request_headers:

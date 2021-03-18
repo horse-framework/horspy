@@ -1,17 +1,17 @@
 import io
 from typing import List
 
-from twino_message import TwinoMessage, MessageHeader
+from horse_message import HorseMessage, MessageHeader
 
 
 class ProtocolWriter:
     """
-    Writes twino message into a bytes stream
+    Writes Horse message into a bytes stream
     """
 
-    def write(self, msg: TwinoMessage, additional_headers: List[MessageHeader] = None) -> io.BytesIO:
+    def write(self, msg: HorseMessage, additional_headers: List[MessageHeader] = None) -> io.BytesIO:
         """
-        Writes twino message into byte stream
+        Writes Horse message into byte stream
         :param msg: message itself
         :param additional_headers: additional headers
         :return: returs byte stream with 0 seek position

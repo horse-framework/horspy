@@ -1,9 +1,9 @@
 from result_code import ResultCode
-from twino_message import TwinoMessage
+from horse_message import HorseMessage
 
 
-class TwinoResult:
-    """ Twino Messaging Queue Operation Result """
+class HorseResult:
+    """ Horse Messaging Queue Operation Result """
 
     code: ResultCode
     """ Result code """
@@ -13,7 +13,7 @@ class TwinoResult:
     Reason is usually used for unsuccessful results
     """
 
-    message: TwinoMessage
+    message: HorseMessage
     """
     Raw message of the operation
     """

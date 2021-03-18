@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime
 
-from twino_message import TwinoMessage
+from horse_message import HorseMessage
 
 
 class TrackingMessage:
@@ -10,7 +10,7 @@ class TrackingMessage:
     expiration: datetime
 
     __completed: bool
-    __message: TwinoMessage
+    __message: HorseMessage
     __is_ack: bool
     __future: asyncio.Future
 
@@ -30,7 +30,7 @@ class TrackingMessage:
     def future(self):
         return self.__future
 
-    def __init__(self, msg: TwinoMessage):
+    def __init__(self, msg: HorseMessage):
         self.__message = msg
         self.__is_ack = msg.pending_acknowledge
         self.__completed = False
@@ -49,7 +49,7 @@ class TrackingMessage:
         except:
             pass
 
-    def received(self, msg: TwinoMessage):
+    def received(self, msg: HorseMessage):
         """ Marks future as response is received and sends response message to awaiter """
 
         if self.__completed:

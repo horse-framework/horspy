@@ -3,7 +3,7 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Callable
 
-from twino_message import TwinoMessage
+from horse_message import HorseMessage
 
 
 class PullProcess(Enum):
@@ -49,9 +49,9 @@ class PullContainer:
     last_received: datetime
     """ The date last message received """
 
-    messages: List[TwinoMessage]
+    messages: List[HorseMessage]
     """ Received messages """
 
     future: asyncio.Future
 
-    each_msg_func: Callable[[int, TwinoMessage], None]
+    each_msg_func: Callable[[int, HorseMessage], None]
