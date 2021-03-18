@@ -1,5 +1,5 @@
-# twinpy
+# horspy
 
-Python Client for Twino MQ Server
+Python Client for Horse MQ Server
 
 
